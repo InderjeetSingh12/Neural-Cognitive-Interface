@@ -7,3 +7,6 @@ click
 rich
 tiktoken
 sentence-transformers
+rank_bm25
+numpy
+scikit-learn
