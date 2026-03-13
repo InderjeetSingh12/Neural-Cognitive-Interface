@@ -3,87 +3,82 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt
 from src.ingest import IngestionEngine
-from src.vector_store import VectorStoreManager
+from src.vector_store import HybridVectorStore
 from src.llm import LLMInterface
-from src.rag_engine import RAGOrchestrator
+from src.rag_engine import ResearchRAGEngine
 
 console = Console()
 
 @click.group()
 def cli():
     """
-    ðŸ§  NeuroSearch: Modular RAG Engine CLI.
+    ðŸ§  NeuroSearch Research: Advanced 2-Stage RAG CLI.
     """
     pass
 
 @cli.command()
-@click.option("--dir", default="./data/docs", help="Directory containing documents to ingest.")
+@click.option("--dir", default="./data/docs", help="Directory containing documents.")
 def ingest(dir):
     """
-    Ingest documents into the vector store.
+    Ingest docs and fit BM25 sparse retriever.
     """
-    console.print(Panel(f"ðŸš€ Ingesting documents from: [bold cyan]{dir}[/bold cyan]", title="NeuroSearch Ingestion"))
+    console.print(Panel(f"ðŸš€ [bold cyan]Research Ingestion Phase[/bold cyan]\nDirectory: {dir}", title="NeuroSearch ML Research"))
     
-    # Initialize components
     ingestion_engine = IngestionEngine()
-    vector_store_manager = VectorStoreManager()
+    vector_store_manager = HybridVectorStore()
     
     try:
-        # Load and split documents
         docs = ingestion_engine.load_documents(dir)
         if not docs:
             console.print("[yellow]No documents found.[/yellow]")
             return
 
         chunks = ingestion_engine.split_documents(docs)
-        
-        # Add to vector store
         vector_store_manager.add_documents(chunks)
         
-        console.print(f"[green]Successfully ingested {len(chunks)} chunks into the vector store![/green]")
+        console.print(f"[green]Successfully indexed {len(chunks)} chunks with Hybrid (Dense + BM25) support![/green]")
         
     except Exception as e:
-        console.print(f"[red]Error during ingestion: {e}[/red]")
+        console.print(f"[red]Ingestion Error: {e}[/red]")
 
 @cli.command()
-@click.option("--model", default="llama3", help="Ollama model to use.")
-def chat(model):
+@click.option("--model", default="llama3", help="Ollama model.")
+@click.option("--alpha", default=0.5, type=float, help="Hybrid alpha (1.0=Dense, 0.0=Sparse).")
+def chat(model, alpha):
     """
-    Start an interactive chat session with your documents.
+    Start a session with 2-Stage Hybrid Retrieval & Re-ranking.
     """
-    console.print(Panel(f"ðŸ’¬ Starting chat session with model: [bold green]{model}[/bold green]", title="NeuroSearch Chat"))
+    console.print(Panel(f"ðŸ’¬ [bold green]Research Chat Session[/bold green]\nModel: {model} | Hybrid Alpha: {alpha}", title="NeuroSearch RAG"))
     
-    # Initialize components
-    vector_store_manager = VectorStoreManager()
+    vector_store = HybridVectorStore()
     llm_interface = LLMInterface(model_name=model)
-    rag_orchestrator = RAGOrchestrator(vector_store_manager, llm_interface)
+    rag_engine = ResearchRAGEngine(vector_store, llm_interface)
     
-    console.print("Type 'exit' or 'quit' to end the session.\n")
+    console.print("[italic dim]Status: Cross-Encoder (MS-MARCO) Ready for Re-ranking.[/italic dim]\n")
     
     while True:
-        user_query = Prompt.ask("[bold blue]You[/bold blue]")
+        user_query = Prompt.ask("[bold blue]Query[/bold blue]")
         
         if user_query.lower() in ["exit", "quit"]:
-            console.print("[yellow]Goodbye![/yellow]")
             break
             
-        with console.status("[bold green]Thinking...[/bold green]", spinner="dots"):
+        with console.status("[bold green]Stage 1: Hybrid Retrieval | Stage 2: Cross-Encoder Re-ranking...[/bold green]"):
             try:
-                response = rag_orchestrator.query(user_query)
+                response = rag_engine.query(user_query, alpha=alpha)
                 answer = response.get("result", "No answer found.")
                 sources = response.get("source_documents", [])
                 
-                console.print(f"\n[bold green]NeuroSearch AI:[/bold green] {answer}\n")
+                console.print(f"\n[bold green]NeuroSearch Research AI:[/bold green]\n{answer}\n")
                 
                 if sources:
-                    console.print("[italic dim]Sources:[/italic dim]")
-                    for doc in sources[:2]: # Show top 2 sources
+                    console.print("[bold italic]Verified Sources (Re-ranked):[/bold italic]")
+                    for i, doc in enumerate(sources):
                         source_name = doc.metadata.get('source', 'Unknown')
-                        console.print(f"- [dim]{source_name}[/dim]")
-                console.print("\n" + "-"*50 + "\n")
+                        console.print(f"{i+1}. [dim]{source_name}[/dim]")
+                console.print("\n" + "="*60 + "\n")
                 
             except Exception as e:
-                console.print(f"[red]Error generating response: {e}[/red]")
+                console.print(f"[red]Error: {e}[/red]")
 
 if __name__ == "__main__":
     cli()
