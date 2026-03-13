@@ -1,0 +1,9 @@
+langchain
+langchain-community
+chromadb
+ollama
+pydantic
+click
+rich
+tiktoken
+sentence-transformers
